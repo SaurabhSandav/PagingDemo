@@ -1,5 +1,7 @@
 package com.redridgeapps.pagingdemo.model;
 
+import android.support.v7.util.DiffUtil;
+
 import com.squareup.moshi.Json;
 
 public class SearchItem {
@@ -806,5 +808,21 @@ public class SearchItem {
     public void setScore(Double score) {
         this.score = score;
     }
+
+    // Allows the adapter to calculate the difference between the old list and new list. This also simplifies animations.
+    public static final DiffUtil.ItemCallback<SearchItem> DIFF_CALLBACK = new DiffUtil.ItemCallback<SearchItem>() {
+
+        // Check if items represent the same thing.
+        @Override
+        public boolean areItemsTheSame(SearchItem oldItem, SearchItem newItem) {
+            return oldItem.getId().equals(newItem.getId());
+        }
+
+        // Checks if the item contents have changed.
+        @Override
+        public boolean areContentsTheSame(SearchItem oldItem, SearchItem newItem) {
+            return true; // Assume Repository details don't change
+        }
+    };
 
 }
