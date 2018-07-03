@@ -1,5 +1,6 @@
 package com.redridgeapps.pagingdemo;
 
+import android.arch.paging.PagedList;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
@@ -11,6 +12,9 @@ import android.widget.TextView;
 
 import com.readystatesoftware.chuck.ChuckInterceptor;
 import com.redridgeapps.pagingdemo.api.GitHubService;
+import com.redridgeapps.pagingdemo.data.SearchDataSource;
+import com.redridgeapps.pagingdemo.model.SearchItem;
+import com.redridgeapps.pagingdemo.util.MainThreadExecutor;
 
 import okhttp3.OkHttpClient;
 import retrofit2.Retrofit;
@@ -18,6 +22,7 @@ import retrofit2.converter.moshi.MoshiConverterFactory;
 
 public class MainActivity extends AppCompatActivity {
 
+    private MainThreadExecutor executor;
     private SearchListAdapter adapter;
     private GitHubService service;
 
@@ -25,6 +30,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        executor = new MainThreadExecutor();
 
         setupGitHubService();
         setupSearch();
@@ -53,7 +60,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public boolean onEditorAction(TextView textView, int actionId, KeyEvent keyEvent) {
                 if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                    // TODO Setup DataSource
+                    setupDataSource(textView.getText().toString());
                     return true;
                 }
 
@@ -70,5 +77,36 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setLayoutManager(new LinearLayoutManager(MainActivity.this));
         recyclerView.setHasFixedSize(true);
         recyclerView.setAdapter(adapter);
+    }
+
+    private void setupDataSource(String queryString) {
+
+        // Initialize Data Source
+        SearchDataSource dataSource = new SearchDataSource(service, queryString);
+
+        // Configure paging
+        PagedList.Config config = new PagedList.Config.Builder()
+                // Number of items to fetch at once. [Required]
+                .setPageSize(GitHubService.DEFAULT_PER_PAGE)
+                // Number of items to fetch on initial load. Should be greater than Page size. [Optional]
+                .setInitialLoadSizeHint(GitHubService.DEFAULT_PER_PAGE * 2)
+                .setEnablePlaceholders(true) // Show empty views until data is available
+                .build();
+
+        // Build PagedList
+        PagedList<SearchItem> list =
+                new PagedList.Builder<>(dataSource, config) // Can pass `pageSize` directly instead of `config`
+                        // Do fetch operations on the main thread. We'll instead be using Retrofit's
+                        // built-in enqueue() method for background api calls.
+                        .setFetchExecutor(executor)
+                        // Send updates on the main thread
+                        .setNotifyExecutor(executor)
+                        .build();
+
+        // Ideally, the above code should be placed in a ViewModel class so that the list can be
+        // retained across configuration changes.
+
+        // Required only once. Paging will handle fetching and updating the list.
+        adapter.submitList(list);
     }
 }
