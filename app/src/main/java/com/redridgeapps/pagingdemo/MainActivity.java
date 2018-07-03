@@ -1,11 +1,15 @@
 package com.redridgeapps.pagingdemo;
 
+import android.arch.lifecycle.Observer;
 import android.arch.paging.PagedList;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.KeyEvent;
+import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -13,6 +17,7 @@ import android.widget.TextView;
 import com.readystatesoftware.chuck.ChuckInterceptor;
 import com.redridgeapps.pagingdemo.api.GitHubService;
 import com.redridgeapps.pagingdemo.data.SearchDataSource;
+import com.redridgeapps.pagingdemo.model.RequestFailure;
 import com.redridgeapps.pagingdemo.model.SearchItem;
 import com.redridgeapps.pagingdemo.util.MainThreadExecutor;
 
@@ -108,5 +113,21 @@ public class MainActivity extends AppCompatActivity {
 
         // Required only once. Paging will handle fetching and updating the list.
         adapter.submitList(list);
+
+        dataSource.getRequestFailureLiveData().observe(this, new Observer<RequestFailure>() {
+            @Override
+            public void onChanged(@Nullable final RequestFailure requestFailure) {
+                if (requestFailure == null) return;
+
+                Snackbar.make(findViewById(android.R.id.content), requestFailure.getErrorMessage(), Snackbar.LENGTH_INDEFINITE)
+                        .setAction("RETRY", new View.OnClickListener() {
+                            @Override
+                            public void onClick(View view) {
+                                // Retry the failed request
+                                requestFailure.getRetryable().retry();
+                            }
+                        }).show();
+            }
+        });
     }
 }

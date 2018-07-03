@@ -1,11 +1,15 @@
 package com.redridgeapps.pagingdemo.data;
 
+import android.arch.lifecycle.LiveData;
+import android.arch.lifecycle.MutableLiveData;
 import android.arch.paging.PageKeyedDataSource;
 import android.support.annotation.NonNull;
 
 import com.redridgeapps.pagingdemo.api.GitHubService;
+import com.redridgeapps.pagingdemo.model.RequestFailure;
 import com.redridgeapps.pagingdemo.model.SearchItem;
 import com.redridgeapps.pagingdemo.model.SearchModel;
+import com.redridgeapps.pagingdemo.util.function.Retryable;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -16,14 +20,16 @@ public class SearchDataSource extends PageKeyedDataSource<Integer, SearchItem> {
 
     private final GitHubService service;
     private final String queryString;
+    private final MutableLiveData<RequestFailure> requestFailureLiveData;
 
     public SearchDataSource(GitHubService service, String queryString) {
         this.service = service;
         this.queryString = queryString;
+        this.requestFailureLiveData = new MutableLiveData<>();
     }
 
     @Override
-    public void loadInitial(@NonNull LoadInitialParams<Integer> params, @NonNull final LoadInitialCallback<Integer, SearchItem> callback) {
+    public void loadInitial(@NonNull final LoadInitialParams<Integer> params, @NonNull final LoadInitialCallback<Integer, SearchItem> callback) {
 
         // Initial page
         final int page = 1;
@@ -55,7 +61,15 @@ public class SearchDataSource extends PageKeyedDataSource<Integer, SearchItem> {
 
             @Override
             public void onFailure(@NonNull Call<SearchModel> call, @NonNull Throwable t) {
-                throw new RuntimeException(t);
+                // Allow user to retry the failed request
+                Retryable retryable = new Retryable() {
+                    @Override
+                    public void retry() {
+                        loadInitial(params, callback);
+                    }
+                };
+
+                handleError(retryable, t);
             }
         };
 
@@ -69,7 +83,7 @@ public class SearchDataSource extends PageKeyedDataSource<Integer, SearchItem> {
     }
 
     @Override
-    public void loadAfter(@NonNull LoadParams<Integer> params, @NonNull final LoadCallback<Integer, SearchItem> callback) {
+    public void loadAfter(@NonNull final LoadParams<Integer> params, @NonNull final LoadCallback<Integer, SearchItem> callback) {
 
         // Next page.
         final int page = params.key;
@@ -97,10 +111,26 @@ public class SearchDataSource extends PageKeyedDataSource<Integer, SearchItem> {
 
             @Override
             public void onFailure(@NonNull Call<SearchModel> call, @NonNull Throwable t) {
-                throw new RuntimeException(t);
+                // Allow user to retry the failed request
+                Retryable retryable = new Retryable() {
+                    @Override
+                    public void retry() {
+                        loadAfter(params, callback);
+                    }
+                };
+
+                handleError(retryable, t);
             }
         };
 
         call.enqueue(requestCallback);
+    }
+
+    public LiveData<RequestFailure> getRequestFailureLiveData() {
+        return requestFailureLiveData;
+    }
+
+    private void handleError(Retryable retryable, Throwable t) {
+        requestFailureLiveData.postValue(new RequestFailure(retryable, t.getMessage()));
     }
 }
